@@ -34,9 +34,7 @@ jobs:
     - name: Run MLflow Project
       run: |
         cd MLProject
-        mlflow run . --env-manager=local \
-          -P n_estimators=${{ github.event.inputs.n_estimators || '100' }} \
-          -P max_depth=${{ github.event.inputs.max_depth || '5' }}
+        mlflow run . --env-manager=local -P n_estimators=${{ github.event.inputs.n_estimators || '100' }} -P max_depth=${{ github.event.inputs.max_depth || '5' }} -P test_size=0.2 -P random_state=42
 
     # ===== SKILLED: Upload artifacts ke GitHub =====
     - name: Upload MLflow artifacts
