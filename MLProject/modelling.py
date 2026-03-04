@@ -39,12 +39,18 @@ def load_data():
 
 
 def main(n_estimators, max_depth, test_size, random_state):
-    mlflow.set_experiment("Iris_CI_Training")
+    # Jika dijalankan via `mlflow run`, MLFLOW_RUN_ID sudah di-set otomatis
+    # Gunakan active run jika ada, hindari konflik nested run
+    env_run_id = os.environ.get('MLFLOW_RUN_ID')
+    if not env_run_id:
+        mlflow.set_experiment("Iris_CI_Training")
 
     X_train, X_test, y_train, y_test = load_data()
     print(f"Train: {X_train.shape[0]} | Test: {X_test.shape[0]}")
 
-    with mlflow.start_run(run_name="CI_Run"):
+    run_ctx = mlflow.start_run(run_id=env_run_id) if env_run_id else mlflow.start_run(run_name="CI_Run")
+
+    with run_ctx:
         model = RandomForestClassifier(
             n_estimators=n_estimators,
             max_depth=max_depth if max_depth > 0 else None,
