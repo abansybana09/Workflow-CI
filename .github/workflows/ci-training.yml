@@ -1,0 +1,89 @@
+name: CI - Model Training & Build Docker
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      n_estimators:
+        description: 'Jumlah estimator'
+        default: '100'
+      max_depth:
+        description: 'Max depth (0 = None)'
+        default: '5'
+
+jobs:
+  train-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install mlflow==2.19.0 scikit-learn pandas numpy matplotlib seaborn
+
+    # ===== JALANKAN MLFLOW PROJECT =====
+    - name: Run MLflow Project
+      run: |
+        cd MLProject
+        mlflow run . --no-conda \
+          -P n_estimators=${{ github.event.inputs.n_estimators || '100' }} \
+          -P max_depth=${{ github.event.inputs.max_depth || '5' }}
+
+    # ===== SKILLED: Upload artifacts ke GitHub =====
+    - name: Upload MLflow artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: mlflow-artifacts-${{ github.run_number }}
+        path: |
+          MLProject/mlruns/
+          MLProject/run_id.txt
+        retention-days: 30
+
+    # ===== SKILLED: Commit run_id.txt ke repo =====
+    - name: Save run_id to repository
+      run: |
+        git config --local user.email "ci@github.com"
+        git config --local user.name "GitHub Actions CI"
+        cp MLProject/run_id.txt run_id.txt
+        git add run_id.txt
+        git diff --staged --quiet || git commit -m "CI: update run_id after training run #${{ github.run_number }}"
+        git push
+
+    # ===== ADVANCED: Build Docker Image dari model =====
+    - name: Get Run ID
+      id: get_run_id
+      run: echo "RUN_ID=$(cat MLProject/run_id.txt)" >> $GITHUB_OUTPUT
+
+    - name: Build Docker image from MLflow model
+      run: |
+        RUN_ID="${{ steps.get_run_id.outputs.RUN_ID }}"
+        IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/iris-mlflow-model:latest"
+        echo "Building Docker image: $IMAGE_NAME from run $RUN_ID"
+        mlflow models build-docker \
+          --model-uri "MLProject/mlruns/0/${RUN_ID}/artifacts/model" \
+          --name "$IMAGE_NAME"
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Push Docker image to Docker Hub
+      run: |
+        IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/iris-mlflow-model:latest"
+        IMAGE_VERSIONED="${{ secrets.DOCKER_USERNAME }}/iris-mlflow-model:run-${{ github.run_number }}"
+        docker tag "$IMAGE_NAME" "$IMAGE_VERSIONED"
+        docker push "$IMAGE_NAME"
+        docker push "$IMAGE_VERSIONED"
+        echo "Docker image pushed: $IMAGE_NAME"
+        echo "Docker Hub: https://hub.docker.com/r/${{ secrets.DOCKER_USERNAME }}/iris-mlflow-model"

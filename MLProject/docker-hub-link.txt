@@ -1,0 +1,10 @@
+# Docker Hub - Kriteria 3 Advanced
+# Link Docker image yang di-build dari MLflow model
+
+Docker Hub URL: https://hub.docker.com/r/abansybana09/iris-mlflow-model
+
+# Pull command:
+# docker pull abansybana09/iris-mlflow-model:latest
+
+# Run command:
+# docker run -p 8080:8080 abansybana09/iris-mlflow-model:latest
